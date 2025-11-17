@@ -1,0 +1,240 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            Int            @id @default(autoincrement())
+  name          String
+  email         String         @unique
+  password      String
+  roleId        Int
+  role          Role           @relation(fields: [roleId], references: [id])
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  sales         SalesOrder[]
+  logs          ActivityLog[]
+  interactions  Interaction[]
+
+  @@index([roleId])
+  @@index([email])
+}
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  users       User[]
+  createdAt   DateTime @default(now())
+}
+
+model Customer {
+  id           Int           @id @default(autoincrement())
+  name         String
+  email        String?
+  phone        String?
+  company      String?
+  segment      String?
+  type         CustomerType
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  interactions Interaction[]
+  leads        Lead[]
+  tickets      Ticket[]
+  sales        SalesOrder[]
+
+  @@index([type])
+  @@index([email])
+}
+
+enum CustomerType {
+  LEAD
+  PROSPECT
+  CUSTOMER
+}
+
+model Interaction {
+  id         Int             @id @default(autoincrement())
+  customerId Int
+  userId     Int
+  note       String          @db.Text
+  date       DateTime        @default(now())
+  type       InteractionType
+  customer   Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  user       User            @relation(fields: [userId], references: [id])
+
+  @@index([customerId])
+  @@index([userId])
+}
+
+enum InteractionType {
+  CALL
+  EMAIL
+  MEETING
+  CHAT
+  VISIT
+}
+
+model Lead {
+  id         Int        @id @default(autoincrement())
+  customerId Int
+  source     String?
+  status     LeadStatus
+  pipeline   Pipeline?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  customer   Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([status])
+}
+
+enum LeadStatus {
+  NEW
+  PROSPECT
+  DEAL
+  LOST
+}
+
+model Pipeline {
+  id             Int              @id @default(autoincrement())
+  leadId         Int              @unique
+  stage          PipelineStage
+  activities     SalesActivity[]
+  salesOrder     SalesOrder?
+  quotations     Quotation[]
+  lead           Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([stage])
+}
+
+enum PipelineStage {
+  LEAD
+  PROSPECT
+  DEAL
+  WON
+  LOST
+}
+
+model SalesActivity {
+  id          Int          @id @default(autoincrement())
+  pipelineId  Int
+  description String       @db.Text
+  type        ActivityType
+  dueDate     DateTime
+  done        Boolean      @default(false)
+  pipeline    Pipeline     @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now())
+
+  @@index([pipelineId])
+  @@index([dueDate])
+}
+
+enum ActivityType {
+  TASK
+  MEETING
+  FOLLOW_UP
+}
+
+model Quotation {
+  id         Int              @id @default(autoincrement())
+  pipelineId Int
+  amount     Float
+  status     QuotationStatus
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  pipeline   Pipeline         @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  salesOrder SalesOrder[]
+
+  @@index([pipelineId])
+  @@index([status])
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+}
+
+model SalesOrder {
+  id          Int              @id @default(autoincrement())
+  pipelineId  Int              @unique
+  customerId  Int
+  userId      Int
+  quotationId Int
+  status      SalesOrderStatus
+  totalAmount Float
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  pipeline    Pipeline         @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  customer    Customer         @relation(fields: [customerId], references: [id])
+  user        User             @relation(fields: [userId], references: [id])
+  quotation   Quotation        @relation(fields: [quotationId], references: [id])
+  ticket      Ticket?
+
+  @@index([customerId])
+  @@index([userId])
+  @@index([status])
+}
+
+enum SalesOrderStatus {
+  DRAFT
+  PENDING
+  DONE
+}
+
+model Ticket {
+  id           Int          @id @default(autoincrement())
+  salesOrderId Int          @unique
+  customerId   Int
+  title        String
+  description  String       @db.Text
+  status       TicketStatus
+  priority     Priority     @default(MEDIUM)
+  deadline     DateTime
+  slaMinutes   Int
+  resolvedAt   DateTime?
+  salesOrder   SalesOrder   @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  customer     Customer     @relation(fields: [customerId], references: [id])
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([customerId])
+  @@index([status])
+  @@index([priority])
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model ActivityLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  action    String
+  module    String
+  details   String?  @db.Text
+  date      DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([module])
+  @@index([date])
+}
